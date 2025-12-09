@@ -153,3 +153,8 @@ HCURSOR CDBViewerDlg::OnQueryDragIcon()
 	return static_cast<HCURSOR>(m_hIcon);
 }
 
+
+
+
+
+
