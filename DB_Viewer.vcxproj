@@ -195,6 +195,7 @@
     <ClInclude Include="pch.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="targetver.h" />
+    <ClInclude Include="TypeDB.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="DB_Viewer.cpp" />
@@ -205,6 +206,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="TypeDB.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="DBViewer.rc" />
