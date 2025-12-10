@@ -27,6 +27,7 @@ public:
 protected:
 	//월인천강지곡 원본 이미지 
 	CImage m_bookImg;
+	CImage m_charImg;
 
 	// 현재 선택된 글자 인덱스
 	int m_nCurSheet = 1;
@@ -37,6 +38,7 @@ protected:
 
 	// 장 번호에 해당하는 책 이미지를 로딩해주는 함수
 	void LoadBookImage(int sheet);
+	void InfoText();
 
 // 구현입니다.
 protected:
@@ -52,4 +54,8 @@ public:
 	afx_msg void OnBnClickedBtnLoadCsv();
 	afx_msg void OnStnClickedStaticBook();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
+	afx_msg void LoadSelectedCharImage();
+
 };
+
+

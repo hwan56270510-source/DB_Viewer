@@ -79,9 +79,6 @@ BOOL CDBViewerDlg::OnInitDialog()
 
 	// 시스템 메뉴에 "정보..." 메뉴 항목을 추가합니다.
 
-	// IDM_ABOUTBOX는 시스템 명령 범위에 있어야 합니다.
-	ASSERT((IDM_ABOUTBOX & 0xFFF0) == IDM_ABOUTBOX);
-	ASSERT(IDM_ABOUTBOX < 0xF000);
 
 	CMenu* pSysMenu = GetSystemMenu(FALSE);
 	if (pSysMenu != nullptr)
@@ -89,7 +86,6 @@ BOOL CDBViewerDlg::OnInitDialog()
 		BOOL bNameValid;
 		CString strAboutMenu;
 		bNameValid = strAboutMenu.LoadString(IDS_ABOUTBOX);
-		ASSERT(bNameValid);
 		if (!strAboutMenu.IsEmpty())
 		{
 			pSysMenu->AppendMenu(MF_SEPARATOR);
@@ -101,6 +97,7 @@ BOOL CDBViewerDlg::OnInitDialog()
 	//  프레임워크가 이 작업을 자동으로 수행합니다.
 	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정합니다.
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
+	ModifyStyle(WS_THICKFRAME, 0); //창의 크기를 고정하는 방법 대신 테두리 크기 조정을 막아두는 방법 선택 (블로그 참고)
 
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 
@@ -211,6 +208,22 @@ void CDBViewerDlg::OnPaint()
 
 		}
 	}
+	CWnd* pCharImgCtrl = GetDlgItem(IDC_STATIC_CHAR_IMAGE);
+	if (pCharImgCtrl && !m_charImg.IsNull())
+	{
+		CDC* pDC = pCharImgCtrl->GetDC();
+		CRect rc;
+		pCharImgCtrl->GetClientRect(rc);
+
+		m_charImg.StretchBlt(
+			pDC->m_hDC,
+			0, 0,
+			rc.Width(), rc.Height(),
+			SRCCOPY
+		);
+
+		pCharImgCtrl->ReleaseDC(pDC);
+	}
 
 }
 
@@ -241,7 +254,7 @@ void CDBViewerDlg::OnBnClickedBtnLoadCsv()
 	if (m_DB.ReadCSVFile(path))
 	{
 		CString msg;
-		msg.Format(L"CSV 로딩을 성공헸습니다.\n\n총 글자 수: %d\n총 장 수: %d",
+		msg.Format(L"CSV 로딩을 성공했습니다.\n\n총 글자 수: %d\n총 장 수: %d",
 			m_DB.m_nChar, m_DB.m_nSheet);
 
 		int pos = path.ReverseFind(L'\\');
@@ -251,6 +264,7 @@ void CDBViewerDlg::OnBnClickedBtnLoadCsv()
 		AfxMessageBox(msg);
 		LoadBookImage(1);
 		m_selectChar = 0;
+		InfoText();
 		Invalidate();
 	}
 	else
@@ -325,7 +339,8 @@ void CDBViewerDlg::OnLButtonDown(UINT nFlags, CPoint point)
 			if (localY >= y && localY <= y + h)
 			{
 				m_selectChar = i;
-
+				InfoText();
+				LoadSelectedCharImage();
 				//Invalidate()를 사용해서 다른 글자를 선택시 초록 상자를 다시 그리기
 				Invalidate();
 				break;
@@ -335,3 +350,88 @@ void CDBViewerDlg::OnLButtonDown(UINT nFlags, CPoint point)
 
 	CDialogEx::OnLButtonDown(nFlags, point);
 }
+
+void CDBViewerDlg::InfoText()
+{
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	SCharInfo info = m_DB.m_Chars[m_selectChar];
+
+	CString str;
+	str.Format(L"%s\n%d장 %d행 %d번",
+		info.m_char,
+		info.m_sheet,
+		info.m_line,
+		info.m_order);
+
+	SetDlgItemText(IDC_STATIC_CHARINFO, str);
+
+}
+
+void CDBViewerDlg::LoadSelectedCharImage()
+{
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	SCharInfo info = m_DB.m_Chars[m_selectChar];
+
+	// ✅ 1단계: 글자 코드 폴더 경로 생성
+	CString charFolder;
+	charFolder.Format(L"C:\\VTK_TOOL\\03_type\\%s", info.m_char);
+
+	// ✅ 2단계: 그 안에 있는 첫 번째 하위 폴더 찾기
+	CString subFolderPath;
+	WIN32_FIND_DATA fd;
+	HANDLE hFind;
+
+	CString searchPath = charFolder + L"\\*";
+	hFind = FindFirstFile(searchPath, &fd);
+
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do
+		{
+			if ((fd.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) &&
+				wcscmp(fd.cFileName, L".") != 0 &&
+				wcscmp(fd.cFileName, L"..") != 0)
+			{
+				subFolderPath = charFolder + L"\\" + fd.cFileName;
+				break;
+			}
+		} while (FindNextFile(hFind, &fd));
+
+		FindClose(hFind);
+	}
+
+	if (subFolderPath.IsEmpty())
+		return;
+
+	// ✅ 3단계: 그 안에 있는 첫 번째 PNG 파일 찾기
+	CString imgPath;
+	searchPath = subFolderPath + L"\\*.png";
+	hFind = FindFirstFile(searchPath, &fd);
+
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		imgPath = subFolderPath + L"\\" + fd.cFileName;
+		FindClose(hFind);
+	}
+	else
+	{
+		return;
+	}
+
+	// ✅ 4단계: 이미지 로드
+	m_charImg.Destroy();
+	m_charImg.Load(imgPath);
+
+	Invalidate();  // 화면 갱신
+}
+
