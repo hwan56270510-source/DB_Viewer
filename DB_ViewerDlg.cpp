@@ -86,6 +86,11 @@ BOOL CDBViewerDlg::OnInitDialog()
 	}
 	// 시스템 메뉴에 "정보..." 메뉴 항목을 추가합니다.
 
+	CWnd* pModelWnd = GetDlgItem(IDC_STATIC_MODEL);   // ← 모형 Picture Control ID
+	if (pModelWnd)
+	{
+		InitVtkModelWindow(pModelWnd->GetSafeHwnd());
+	}
 
 	CMenu* pSysMenu = GetSystemMenu(FALSE);
 	if (pSysMenu != nullptr)
@@ -269,8 +274,11 @@ void CDBViewerDlg::OnBnClickedBtnLoadCsv()
 			m_strBookFolder = path.Left(pos);
 
 		AfxMessageBox(msg);
+		LoadSelectedCharImage();
+		LoadSelectedCharSTL();
 		LoadBookImage(1);
 		m_selectChar = 0;
+		UpdateTypeSpinInfo();
 		InfoText();
 		Invalidate();
 	}
@@ -348,6 +356,7 @@ void CDBViewerDlg::OnLButtonDown(UINT nFlags, CPoint point)
 				m_selectChar = i;
 				InfoText();
 				LoadSelectedCharImage();
+				LoadSelectedCharSTL();
 				UpdateTypeSpinInfo();
 				//Invalidate()를 사용해서 다른 글자를 선택시 초록 상자를 다시 그리기
 				Invalidate();
@@ -521,9 +530,37 @@ void CDBViewerDlg::UpdateTypeSpinInfo()
 	SetDlgItemText(IDC_STATIC_TYPES, str);
 }
 
-void CDBViewerDlg::OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult)
+
+
+//VTK구현부//
+void CDBViewerDlg::InitVtkModelWindow(void* hWnd)
 {
-	NMUPDOWN* pNMUpDown = (NMUPDOWN*)pNMHDR;
+	// 이미 초기화되어 있으면 다시 안 함
+	if (m_vtkModelWindow != nullptr)
+		return;
+
+	// 인터랙터 생성 + 트랙볼 스타일
+	m_vtkModelInteractor =
+		vtkSmartPointer<vtkRenderWindowInteractor>::New();
+	m_vtkModelInteractor->SetInteractorStyle(
+		vtkSmartPointer<vtkInteractorStyleTrackballCamera>::New());
+
+	// 렌더러 생성 (배경 밝은 회색)
+	m_vtkModelRenderer = vtkSmartPointer<vtkRenderer>::New();
+	m_vtkModelRenderer->SetBackground(0.9, 0.9, 0.9);
+
+	// 렌더 윈도우 생성해서 Picture Control HWND에 붙이기
+	m_vtkModelWindow = vtkSmartPointer<vtkRenderWindow>::New();
+	m_vtkModelWindow->SetParentId(hWnd);
+	m_vtkModelWindow->SetInteractor(m_vtkModelInteractor);
+	m_vtkModelWindow->AddRenderer(m_vtkModelRenderer);
+	m_vtkModelWindow->Render();
+}
+
+void CDBViewerDlg::LoadSelectedCharSTL()
+{
+	if (!m_vtkModelWindow || !m_vtkModelRenderer)
+		return;
 
 	if (m_DB.m_Chars.IsEmpty())
 		return;
@@ -531,47 +568,108 @@ void CDBViewerDlg::OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult)
 	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
 		return;
 
-	//현재 선택된 글자가 무엇인지
+	// 현재 선택된 글자 정보
+	SCharInfo info = m_DB.m_Chars[m_selectChar];
+
+	// 스핀에 찍힌 "몇 번째 활자" 값 (1부터 시작)
+	UINT nIndex = GetDlgItemInt(IDC_EDIT_TYPE);
+	if (nIndex == 0)
+		nIndex = 1;
+
+	// STL 파일 경로 만들기
+	// 예시: C:\VTK_TOOL\04_3d\110A11A10000_1.stl
+	CString stlPath;
+	stlPath.Format(L"C:\\VTK_TOOL\\04_3d\\%s_%u.stl",
+		info.m_char,
+		nIndex);
+
+	// VTK STL 리더로 파일 읽기
+	auto reader = vtkSmartPointer<vtkSTLReader>::New();
+	reader->SetFileName(CT2A(stlPath));
+	reader->Update();
+
+	// 매퍼
+	auto mapper = vtkSmartPointer<vtkPolyDataMapper>::New();
+	mapper->SetInputConnection(reader->GetOutputPort());
+
+	// 액터
+	auto actor = vtkSmartPointer<vtkActor>::New();
+	actor->SetMapper(mapper);
+
+	// 이전에 그려진 것들 싹 제거
+	m_vtkModelRenderer->RemoveAllViewProps();
+
+	// 새 액터 추가 + 카메라 리셋
+	m_vtkModelRenderer->AddActor(actor);
+	m_vtkModelRenderer->ResetCamera();
+
+	// 렌더링
+	m_vtkModelWindow->Render();
+}
+
+
+void CDBViewerDlg::OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	LPNMUPDOWN pNMUpDown = reinterpret_cast<LPNMUPDOWN>(pNMHDR);
+
+	*pResult = 0;
+
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	// 현재 글자
 	CString targetChar = m_DB.m_Chars[m_selectChar].m_char;
 
-	// 같은 글자들간을 모아서 인덱스로 만든 부분
-	CArray<int, int> sameCharIndexList;
+	// 현재 스핀 값
+	int curVal = GetDlgItemInt(IDC_EDIT_TYPE);
+	int newVal = curVal - pNMUpDown->iDelta;
+	// iDelta : 위로 클릭하면 -1, 아래 클릭하면 +1
 
+	if (newVal < 1)
+		newVal = 1;
+
+	// 같은 글자가 전체 몇 개인지 다시 계산
+	int totalCount = 0;
+	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
+	{
+		if (m_DB.m_Chars[i].m_char == targetChar)
+			totalCount++;
+	}
+	if (totalCount <= 0)
+		return;
+
+	if (newVal > totalCount)
+		newVal = totalCount;
+
+	// 스핀/에디트에 값 반영
+	SetDlgItemInt(IDC_EDIT_TYPE, newVal);
+
+	// newVal 번째 같은 글자를 찾아서 m_selectChar 이동
+	int cnt = 0;
 	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
 	{
 		if (m_DB.m_Chars[i].m_char == targetChar)
 		{
-			sameCharIndexList.Add(i);
+			cnt++;
+			if (cnt == newVal)
+			{
+				m_selectChar = i;
+				break;
+			}
 		}
 	}
 
-	if (sameCharIndexList.GetSize() == 0)
-		return;
+	// 글자 정보 / PNG / STL / 카운트 전부 갱신
+	InfoText();
+	LoadSelectedCharImage();
+	LoadSelectedCharSTL();
+	UpdateTypeSpinInfo();
 
-	//현재 m_selectChar가 같은 글자들을 모아서 만든 인덱스인 sameCharIndexList에서 어디있는지 찾는 부분
-	int curPos = 0;
-	for (int i = 0; i < sameCharIndexList.GetSize(); i++)
-	{
-		if (sameCharIndexList[i] == m_selectChar)
-		{
-			curPos = i;
-			break;
-		}
-	}
-
-	int newPos = curPos + pNMUpDown->iDelta;
-	if (newPos < 0)
-		newPos = 0;
-
-	if (newPos >= sameCharIndexList.GetSize())
-		newPos = sameCharIndexList.GetSize() - 1;
-
-	m_selectChar = sameCharIndexList[newPos];
-
-	InfoText();                 // 글자 정보 텍스트 갱신
-	LoadSelectedCharImage();    // 글자 PNG 갱신
-	UpdateTypeSpinInfo();       // 스핀 / 개수 갱신
-	Invalidate();               // 화면 갱신
-
-	*pResult = 0;
+	// 책 이미지 상자(네모)만 다시 그리기
+	Invalidate(FALSE);
 }
+
+

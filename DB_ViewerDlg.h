@@ -5,6 +5,15 @@
 #pragma once
 #include "TypeDB.h"
 // SCharInfo 구조체 정의부
+//VTK관련 헤더
+#include <vtkSmartPointer.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkSTLReader.h>
+#include <vtkPolyDataMapper.h>
+#include <vtkActor.h>
+#include <vtkInteractorStyleTrackballCamera.h>
 
 // CDBViewerDlg 대화 상자
 class CDBViewerDlg : public CDialogEx
@@ -39,6 +48,18 @@ protected:
 	// 장 번호에 해당하는 책 이미지를 로딩해주는 함수
 	void LoadBookImage(int sheet);
 	void InfoText();
+	//VTK STL 렌더링용 멤버
+	vtkSmartPointer<vtkRenderWindow>          m_vtkModelWindow;
+	vtkSmartPointer<vtkRenderer>              m_vtkModelRenderer;
+	vtkSmartPointer<vtkRenderWindowInteractor> m_vtkModelInteractor;
+
+	void InitVtkModelWindow(void* hWnd);   // 모형용 VTK 창 초기화
+	void LoadSelectedCharSTL();            // 선택 글자의 STL 로딩
+
+	// 스핀과 관련된 정보 갱신
+	void UpdateTypeSpinInfo();
+	void UpdateCharOrderInfo();
+	void LoadSelectedCharImage();
 
 // 구현입니다.
 protected:
@@ -54,9 +75,6 @@ public:
 	afx_msg void OnBnClickedBtnLoadCsv();
 	afx_msg void OnStnClickedStaticBook();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
-	afx_msg void LoadSelectedCharImage();
-	afx_msg void UpdateCharOrderInfo();
-	afx_msg void UpdateTypeSpinInfo();
 	afx_msg void OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult);
 
 };
