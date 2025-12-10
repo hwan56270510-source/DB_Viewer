@@ -55,6 +55,9 @@ public:
 	afx_msg void OnStnClickedStaticBook();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void LoadSelectedCharImage();
+	afx_msg void UpdateCharOrderInfo();
+	afx_msg void UpdateTypeSpinInfo();
+	afx_msg void OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult);
 
 };
 

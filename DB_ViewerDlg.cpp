@@ -68,6 +68,7 @@ BEGIN_MESSAGE_MAP(CDBViewerDlg, CDialogEx)
 	ON_BN_CLICKED(IDC_BTN_LOAD_CSV, &CDBViewerDlg::OnBnClickedBtnLoadCsv)
 	ON_STN_CLICKED(IDC_STATIC_BOOK, &CDBViewerDlg::OnStnClickedStaticBook)
 	ON_WM_LBUTTONDOWN()
+	ON_NOTIFY(UDN_DELTAPOS, IDC_SPIN_TYPE, &CDBViewerDlg::OnDeltaposSpinType)
 END_MESSAGE_MAP()
 
 
@@ -76,7 +77,13 @@ END_MESSAGE_MAP()
 BOOL CDBViewerDlg::OnInitDialog()
 {
 	CDialogEx::OnInitDialog();
-
+	CSpinButtonCtrl* pSpin = (CSpinButtonCtrl*)GetDlgItem(IDC_SPIN_TYPE);
+	if (pSpin)
+	{
+		pSpin->SetRange32(1, 20); 
+		pSpin->SetPos32(1);   
+		SetDlgItemInt(IDC_EDIT_TYPE, 1);
+	}
 	// 시스템 메뉴에 "정보..." 메뉴 항목을 추가합니다.
 
 
@@ -98,7 +105,7 @@ BOOL CDBViewerDlg::OnInitDialog()
 	SetIcon(m_hIcon, TRUE);			// 큰 아이콘을 설정합니다.
 	SetIcon(m_hIcon, FALSE);		// 작은 아이콘을 설정합니다.
 	ModifyStyle(WS_THICKFRAME, 0); //창의 크기를 고정하는 방법 대신 테두리 크기 조정을 막아두는 방법 선택 (블로그 참고)
-
+	SetDlgItemInt(IDC_EDIT_TYPE, 1);
 	// TODO: 여기에 추가 초기화 작업을 추가합니다.
 
 	return TRUE;  // 포커스를 컨트롤에 설정하지 않으면 TRUE를 반환합니다.
@@ -341,6 +348,7 @@ void CDBViewerDlg::OnLButtonDown(UINT nFlags, CPoint point)
 				m_selectChar = i;
 				InfoText();
 				LoadSelectedCharImage();
+				UpdateTypeSpinInfo();
 				//Invalidate()를 사용해서 다른 글자를 선택시 초록 상자를 다시 그리기
 				Invalidate();
 				break;
@@ -371,7 +379,7 @@ void CDBViewerDlg::InfoText()
 	SetDlgItemText(IDC_STATIC_CHARINFO, str);
 
 }
-
+////////////////////////////////////////////////////////
 void CDBViewerDlg::LoadSelectedCharImage()
 {
 	if (m_DB.m_Chars.IsEmpty())
@@ -382,11 +390,11 @@ void CDBViewerDlg::LoadSelectedCharImage()
 
 	SCharInfo info = m_DB.m_Chars[m_selectChar];
 
-	// ✅ 1단계: 글자 코드 폴더 경로 생성
+	// 글자의 개별 이미지가 들어있는 폴더 경로 생성
 	CString charFolder;
 	charFolder.Format(L"C:\\VTK_TOOL\\03_type\\%s", info.m_char);
 
-	// ✅ 2단계: 그 안에 있는 첫 번째 하위 폴더 찾기
+	// 그 안에 있는 첫 번째 하위 폴더 찾기
 	CString subFolderPath;
 	WIN32_FIND_DATA fd;
 	HANDLE hFind;
@@ -413,7 +421,7 @@ void CDBViewerDlg::LoadSelectedCharImage()
 	if (subFolderPath.IsEmpty())
 		return;
 
-	// ✅ 3단계: 그 안에 있는 첫 번째 PNG 파일 찾기
+	// 그 안에 있는 첫 번째 PNG 파일 찾기
 	CString imgPath;
 	searchPath = subFolderPath + L"\\*.png";
 	hFind = FindFirstFile(searchPath, &fd);
@@ -428,10 +436,142 @@ void CDBViewerDlg::LoadSelectedCharImage()
 		return;
 	}
 
-	// ✅ 4단계: 이미지 로드
 	m_charImg.Destroy();
 	m_charImg.Load(imgPath);
 
 	Invalidate();  // 화면 갱신
 }
 
+void CDBViewerDlg::UpdateCharOrderInfo()
+{
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	// 현재 선택된 글자
+	SCharInfo cur = m_DB.m_Chars[m_selectChar];
+
+	int totalCount = 0;    // 같은 글자 전체 개수
+	int curOrder = 0;      // 그중 지금이 몇 번째인지 (1부터 시작)
+
+	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
+	{
+		if (m_DB.m_Chars[i].m_char == cur.m_char)
+		{
+			totalCount++;
+
+			if (i == m_selectChar)
+			{
+				curOrder = totalCount;   // 몇 번째인지 기억
+			}
+		}
+	}
+
+	//스핀 컨트롤 범위 설정
+	CSpinButtonCtrl* pSpin = (CSpinButtonCtrl*)GetDlgItem(IDC_SPIN_TYPE);
+	if (pSpin != nullptr)
+	{
+		pSpin->SetRange(1, totalCount);
+		pSpin->SetPos(curOrder);
+	}
+
+	CString strCount;
+	strCount.Format(L"/ %d개", totalCount);
+	SetDlgItemText(IDC_STATIC_TYPES, strCount);
+}
+
+void CDBViewerDlg::UpdateTypeSpinInfo()
+{
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	CString targetChar = m_DB.m_Chars[m_selectChar].m_char;
+
+	int totalCount = 0;
+	int currentOrder = 0;
+
+	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
+	{
+		if (m_DB.m_Chars[i].m_char == targetChar)
+		{
+			totalCount++;
+
+			if (i == m_selectChar)
+				currentOrder = totalCount;
+		}
+	}
+
+	// 스핀컨트롤의 스핀 범위 설정
+	CSpinButtonCtrl* pSpin = (CSpinButtonCtrl*)GetDlgItem(IDC_SPIN_TYPE);
+	if (pSpin)
+	{
+		pSpin->SetRange(1, totalCount);
+	}
+
+	// 현재 몇 번째인지 Edit에 표시
+	SetDlgItemInt(IDC_EDIT_TYPE, currentOrder);
+
+	CString str;
+	str.Format(L"/ %d개", totalCount);
+	SetDlgItemText(IDC_STATIC_TYPES, str);
+}
+
+void CDBViewerDlg::OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	NMUPDOWN* pNMUpDown = (NMUPDOWN*)pNMHDR;
+
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	if (m_selectChar < 0 || m_selectChar >= m_DB.m_Chars.GetSize())
+		return;
+
+	//현재 선택된 글자가 무엇인지
+	CString targetChar = m_DB.m_Chars[m_selectChar].m_char;
+
+	// 같은 글자들간을 모아서 인덱스로 만든 부분
+	CArray<int, int> sameCharIndexList;
+
+	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
+	{
+		if (m_DB.m_Chars[i].m_char == targetChar)
+		{
+			sameCharIndexList.Add(i);
+		}
+	}
+
+	if (sameCharIndexList.GetSize() == 0)
+		return;
+
+	//현재 m_selectChar가 같은 글자들을 모아서 만든 인덱스인 sameCharIndexList에서 어디있는지 찾는 부분
+	int curPos = 0;
+	for (int i = 0; i < sameCharIndexList.GetSize(); i++)
+	{
+		if (sameCharIndexList[i] == m_selectChar)
+		{
+			curPos = i;
+			break;
+		}
+	}
+
+	int newPos = curPos + pNMUpDown->iDelta;
+	if (newPos < 0)
+		newPos = 0;
+
+	if (newPos >= sameCharIndexList.GetSize())
+		newPos = sameCharIndexList.GetSize() - 1;
+
+	m_selectChar = sameCharIndexList[newPos];
+
+	InfoText();                 // 글자 정보 텍스트 갱신
+	LoadSelectedCharImage();    // 글자 PNG 갱신
+	UpdateTypeSpinInfo();       // 스핀 / 개수 갱신
+	Invalidate();               // 화면 갱신
+
+	*pResult = 0;
+}
