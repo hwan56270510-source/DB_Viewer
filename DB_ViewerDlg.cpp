@@ -67,6 +67,7 @@ BEGIN_MESSAGE_MAP(CDBViewerDlg, CDialogEx)
 	ON_WM_QUERYDRAGICON()
 	ON_BN_CLICKED(IDC_BTN_LOAD_CSV, &CDBViewerDlg::OnBnClickedBtnLoadCsv)
 	ON_STN_CLICKED(IDC_STATIC_BOOK, &CDBViewerDlg::OnStnClickedStaticBook)
+	ON_WM_LBUTTONDOWN()
 END_MESSAGE_MAP()
 
 
@@ -163,7 +164,7 @@ void CDBViewerDlg::OnPaint()
 
 		pWnd->ReleaseDC(pDC);
 	}
-	// 월인천강지곡의 글자에 박스 그리는 부분 구현부 (빨강 / 초록 / 회색)
+	// 월인천강지곡의 글자에 박스 그리는 부분 구현부
 	if (!m_DB.m_Chars.IsEmpty())
 	{
 		CWnd* pWnd = GetDlgItem(IDC_STATIC_BOOK);
@@ -177,6 +178,9 @@ void CDBViewerDlg::OnPaint()
 			float scaleX = (float)rc.Width() / (float)m_bookImg.GetWidth();
 			float scaleY = (float)rc.Height() / (float)m_bookImg.GetHeight();
 
+			CBrush* pOldBrush = (CBrush*)pDC->SelectStockObject(NULL_BRUSH);
+
+
 			for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
 			{
 				if (m_DB.m_Chars[i].m_sheet != m_nCurSheet)
@@ -189,28 +193,22 @@ void CDBViewerDlg::OnPaint()
 
 				// 펜 색/두께 결정
 				CPen pen;
-				if (i == 0)
+				if (i == m_selectChar)
 				{
-					// 첫 글자는 빨간색 사각형을 굵게
-					pen.CreatePen(PS_SOLID, 2, RGB(255, 0, 0));
-				}
-				else if (i == m_selectChar)
-				{
-					// 선택된 글자는 초록색 사각형을 굵게
-					pen.CreatePen(PS_SOLID, 2, RGB(0, 255, 0));
+					pen.CreatePen(PS_SOLID, 2, RGB(255, 0, 0));   // 선택된 글자는 빨강
 				}
 				else
 				{
-					// 나머지 글자는 연한 회색 사각형으로 얇게 구분
-					pen.CreatePen(PS_SOLID, 1, RGB(180, 180, 180));
+					pen.CreatePen(PS_SOLID, 1, RGB(0, 200, 0));   // 나머지 글자는 초록 유지
 				}
 
 				CPen* pOldPen = pDC->SelectObject(&pen);
 				pDC->Rectangle(x, y, x + w, y + h);
 				pDC->SelectObject(pOldPen);
 			}
-
+			pDC->SelectObject(pOldBrush);
 			pWnd->ReleaseDC(pDC);
+
 		}
 	}
 
@@ -278,4 +276,62 @@ void CDBViewerDlg::LoadBookImage(int sheet)
 void CDBViewerDlg::OnStnClickedStaticBook()
 {
 	// TODO: 여기에 컨트롤 알림 처리기 코드를 추가합니다.
+}
+
+// 마우스 왼쪽 버튼 클릭시 글자에 네모칸이 초록색으로 다시 그려지면서
+//글자가 선택되었음을 알려주는 기능을 하도록 설계
+void CDBViewerDlg::OnLButtonDown(UINT nFlags, CPoint point)
+{
+	CWnd* pBookCtrl = GetDlgItem(IDC_STATIC_BOOK);
+	if (pBookCtrl == nullptr)
+		return;
+
+	if (m_bookImg.IsNull())
+		return;
+
+	if (m_DB.m_Chars.IsEmpty())
+		return;
+
+	// Picture Control(IDC_STATIC_BOOK)의 위치영역을 얻어오는 부분
+	CRect rcBookCtrl;
+	pBookCtrl->GetWindowRect(&rcBookCtrl);
+	ScreenToClient(&rcBookCtrl);
+
+	// 마우스로 클릭했을 때 클릭이 책 이미지 내부에 있는지 판별
+	if (rcBookCtrl.PtInRect(point) == FALSE)
+		return;
+
+	//마우스로 클릭한 좌표는 장치좌표, 이를 논리좌표로 변환
+	int localX = point.x - rcBookCtrl.left;
+	int localY = point.y - rcBookCtrl.top;
+
+	// 화면 스케일 보정
+	float scaleX = (float)rcBookCtrl.Width() / (float)m_bookImg.GetWidth();
+	float scaleY = (float)rcBookCtrl.Height() / (float)m_bookImg.GetHeight();
+
+	for (int i = 0; i < m_DB.m_Chars.GetSize(); i++)
+	{
+		if (m_DB.m_Chars[i].m_sheet != m_nCurSheet)
+			continue;
+
+		int x = (int)(m_DB.m_Chars[i].m_sx * scaleX);
+		int y = (int)(m_DB.m_Chars[i].m_sy * scaleY);
+		int w = (int)(m_DB.m_Chars[i].m_width * scaleX);
+		int h = (int)(m_DB.m_Chars[i].m_height * scaleY);
+
+		//클릭이 이 글자 박스 안에 들어왔는지 판정
+		if (localX >= x && localX <= x + w)
+		{
+			if (localY >= y && localY <= y + h)
+			{
+				m_selectChar = i;
+
+				//Invalidate()를 사용해서 다른 글자를 선택시 초록 상자를 다시 그리기
+				Invalidate();
+				break;
+			}
+		}
+	}
+
+	CDialogEx::OnLButtonDown(nFlags, point);
 }

@@ -51,4 +51,5 @@ protected:
 public:
 	afx_msg void OnBnClickedBtnLoadCsv();
 	afx_msg void OnStnClickedStaticBook();
+	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 };
