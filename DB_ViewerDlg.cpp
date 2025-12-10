@@ -673,3 +673,52 @@ void CDBViewerDlg::OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult)
 }
 
 
+
+void CDBViewerDlg::OnItemChangedListChars(NMHDR* pNMHDR, LRESULT* pResult)
+{
+	NM_LISTVIEW* pNM = (NM_LISTVIEW*)pNMHDR;
+
+	// 상태 변경이 아닌 경우 : 처리하지 않음
+	if (!(pNM->uChanged & LVIF_STATE))
+	{
+		*pResult = 0;
+		return;
+	}
+
+	// 선택된 상태가 아닐 경우 : 처리하지 않음
+	if (!(pNM->uNewState & LVIS_SELECTED))
+	{
+		*pResult = 0;
+		return;
+	}
+
+	int sel = pNM->iItem;
+
+	// 선택된 글자의 이미지 출력
+	ShowSelectedComponentImage(sel);
+
+	*pResult = 0;
+}
+
+
+void CDBViewerDlg::ShowSelectedComponentImage(int index)
+{
+	if (m_compList.IsEmpty())
+		return;   //구성 글자 리스트가 비어 있으면 종료
+
+	if (index < 0 || index >= m_compList.GetSize())
+		return;   //인덱스 범위 초과시 막아주는 역할
+
+	CString compChar = m_compList[index];
+
+	// 이미지 경로
+	CString path;
+	path.Format(L"C:\\VTK_TOOL\\03_type\\%s\\1\\%s.png", compChar, compChar);
+
+	m_charImg.Destroy();
+	m_charImg.Load(path);
+
+	Invalidate(FALSE);
+}
+
+

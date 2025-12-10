@@ -15,6 +15,7 @@
 #include <vtkActor.h>
 #include <vtkInteractorStyleTrackballCamera.h>
 
+
 // CDBViewerDlg 대화 상자
 class CDBViewerDlg : public CDialogEx
 {
@@ -32,7 +33,6 @@ public:
 
 public:
 	CTypeDB m_DB;
-
 protected:
 	//월인천강지곡 원본 이미지 
 	CImage m_bookImg;
@@ -44,6 +44,7 @@ protected:
 
 	// typeDB.csv가 있는 폴더의 경로를 저장
 	CString m_strBookFolder;
+
 
 	// 장 번호에 해당하는 책 이미지를 로딩해주는 함수
 	void LoadBookImage(int sheet);
@@ -61,6 +62,9 @@ protected:
 	void UpdateCharOrderInfo();
 	void LoadSelectedCharImage();
 
+	//선택된 글자의 이미지 출력 함수
+	void ShowSelectedComponentImage(int index);
+
 // 구현입니다.
 protected:
 	HICON m_hIcon;
@@ -76,7 +80,9 @@ public:
 	afx_msg void OnStnClickedStaticBook();
 	afx_msg void OnLButtonDown(UINT nFlags, CPoint point);
 	afx_msg void OnDeltaposSpinType(NMHDR* pNMHDR, LRESULT* pResult);
+	afx_msg void OnItemChangedListChars(NMHDR* pNMHDR, LRESULT* pResult);
 
 };
+
 
 
